@@ -3,8 +3,12 @@ import { motion } from "framer-motion";
 import {
   BookOpen, Brain, Box, Trophy, Video, BarChart3, Settings,
   ChevronLeft, ChevronRight, Sparkles, Search, Bell, TrendingUp,
-  Clock, Flame, Star, LogOut, Shield, Sun, Moon,
+  Clock, Flame, Star, LogOut, Shield, Sun, Moon, MoreVertical,
 } from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdminCheck } from "@/hooks/useAdminCheck";
@@ -174,29 +178,59 @@ const Dashboard = () => {
         </div>
       </motion.aside>
 
-      {/* Mobile bottom nav */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-card/90 backdrop-blur-xl">
-        <div className="flex justify-around py-2">
-          {navItems.slice(0, 5).map((item, i) => (
-            <Link key={item.label} to={item.path} className="flex flex-col items-center gap-0.5 p-1">
-              <item.icon className={`h-5 w-5 ${activeNav === i ? "text-primary" : "text-muted-foreground"}`} />
-              <span className="text-[9px] text-muted-foreground">{item.label.split(" ")[0]}</span>
-            </Link>
-          ))}
-        </div>
-      </div>
-
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-16 border-b border-border/50 flex items-center justify-between px-4 sm:px-6 shrink-0">
-          <div className="relative w-48 sm:w-80">
+        <header className="h-16 border-b border-border/50 flex items-center justify-between gap-2 px-3 sm:px-6 shrink-0">
+          {/* Mobile 3-dot menu (top-left) */}
+          <div className="md:hidden">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  aria-label="Open menu"
+                  className="p-2 rounded-[10px] hover:bg-secondary transition-colors flex items-center gap-1"
+                >
+                  <MoreVertical className="h-5 w-5" />
+                  <span className="text-sm font-semibold">SmartStudy3D</span>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-60 rounded-[12px]">
+                <DropdownMenuLabel className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-semibold text-primary">
+                    {initials}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold truncate">{displayName}</div>
+                    <div className="text-[10px] text-muted-foreground truncate">{user?.email}</div>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {navItems.map((item) => (
+                  <DropdownMenuItem key={item.label} asChild>
+                    <Link to={item.path} className="flex items-center gap-2 cursor-pointer">
+                      <item.icon className="h-4 w-4" /> {item.label}
+                    </Link>
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={toggleTheme} className="cursor-pointer">
+                  {dark ? <Sun className="h-4 w-4 mr-2" /> : <Moon className="h-4 w-4 mr-2" />}
+                  {dark ? "Light mode" : "Dark mode"}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-destructive focus:text-destructive">
+                  <LogOut className="h-4 w-4 mr-2" /> Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          <div className="relative w-48 sm:w-80 hidden md:block">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Search courses, topics..." className="pl-9 rounded-[10px] bg-secondary/50 border-0" />
           </div>
           <div className="flex items-center gap-2 sm:gap-4">
             <button
               onClick={toggleTheme}
-              className="p-2 rounded-[10px] hover:bg-secondary transition-colors"
+              className="p-2 rounded-[10px] hover:bg-secondary transition-colors hidden md:inline-flex"
               title={dark ? "Switch to light mode" : "Switch to dark mode"}
             >
               {dark ? <Sun className="h-4 w-4 text-muted-foreground" /> : <Moon className="h-4 w-4 text-muted-foreground" />}
@@ -211,7 +245,7 @@ const Dashboard = () => {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto pb-20 md:pb-0">
+        <div className="flex-1 overflow-y-auto">
           <div className="p-4 sm:p-6 space-y-8 max-w-7xl">
             <div>
               <h1 className="text-2xl font-bold tracking-tighter">Welcome back, {displayName}</h1>

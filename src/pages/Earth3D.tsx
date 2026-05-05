@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useRef, useState } from "react";
+import { useRef, useState, useMemo } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Html, Environment, Stars, Sparkles } from "@react-three/drei";
 import { motion } from "framer-motion";
@@ -28,18 +28,82 @@ const plateData = [
   { name: "Australian", position: [-1.3, -1.0, -0.5] as [number, number, number], color: "#EC4899" },
 ];
 
+function ContinentPatches() {
+  // Procedurally placed continent-shaped patches on the surface (radius ~2.0)
+  const patches = useMemo(() => {
+    const blobs: { pos: [number, number, number]; scale: number; color: string }[] = [];
+    const continents = [
+      { lat: 50, lon: -100, count: 18, scale: 0.32, color: "#1f7a3a" }, // N. America
+      { lat: -15, lon: -60, count: 14, scale: 0.28, color: "#2b8f44" }, // S. America
+      { lat: 20, lon: 20, count: 18, scale: 0.30, color: "#3a8c3a" }, // Africa
+      { lat: 50, lon: 40, count: 22, scale: 0.34, color: "#1f7a3a" }, // Eurasia
+      { lat: -25, lon: 135, count: 8, scale: 0.26, color: "#5c8c2e" }, // Australia
+      { lat: -85, lon: 0, count: 10, scale: 0.28, color: "#e8eef5" }, // Antarctica
+      { lat: 75, lon: -40, count: 6, scale: 0.22, color: "#e8eef5" }, // Greenland
+    ];
+    continents.forEach((c) => {
+      for (let i = 0; i < c.count; i++) {
+        const dLat = (Math.random() - 0.5) * 30;
+        const dLon = (Math.random() - 0.5) * 40;
+        const lat = ((c.lat + dLat) * Math.PI) / 180;
+        const lon = ((c.lon + dLon) * Math.PI) / 180;
+        const r = 2.02;
+        const x = r * Math.cos(lat) * Math.cos(lon);
+        const y = r * Math.sin(lat);
+        const z = r * Math.cos(lat) * Math.sin(lon);
+        blobs.push({ pos: [x, y, z], scale: c.scale * (0.6 + Math.random() * 0.6), color: c.color });
+      }
+    });
+    return blobs;
+  }, []);
+
+  return (
+    <>
+      {patches.map((b, i) => (
+        <mesh key={i} position={b.pos}>
+          <sphereGeometry args={[b.scale, 16, 16]} />
+          <meshStandardMaterial color={b.color} roughness={0.85} />
+        </mesh>
+      ))}
+    </>
+  );
+}
+
 function EarthLayers({ cutaway, selectedLayer, onSelectLayer, rotationSpeed }: { cutaway: boolean; selectedLayer: string | null; onSelectLayer: (n: string | null) => void; rotationSpeed: number }) {
   const groupRef = useRef<THREE.Group>(null);
   useFrame((_, delta) => { if (groupRef.current) groupRef.current.rotation.y += delta * rotationSpeed; });
 
   return (
     <group ref={groupRef}>
-      {layerData.map((layer, i) => {
+      {/* Realistic ocean surface (only in globe mode) */}
+      {!cutaway && (
+        <>
+          <mesh>
+            <sphereGeometry args={[2.0, 96, 96]} />
+            <meshPhysicalMaterial
+              color="#1e40af"
+              roughness={0.35}
+              metalness={0.15}
+              clearcoat={0.9}
+              clearcoatRoughness={0.2}
+            />
+          </mesh>
+          <ContinentPatches />
+          {/* Cloud layer */}
+          <mesh>
+            <sphereGeometry args={[2.08, 64, 64]} />
+            <meshStandardMaterial color="#ffffff" transparent opacity={0.18} depthWrite={false} />
+          </mesh>
+        </>
+      )}
+
+      {/* Cutaway layered structure */}
+      {cutaway && layerData.map((layer, i) => {
         const isSelected = selectedLayer === layer.name;
         return (
           <group key={layer.name}>
             <mesh onClick={(e) => { e.stopPropagation(); onSelectLayer(isSelected ? null : layer.name); }}>
-              <sphereGeometry args={[layer.radius, 64, 64, 0, cutaway ? Math.PI * 1.5 : Math.PI * 2]} />
+              <sphereGeometry args={[layer.radius, 64, 64, 0, Math.PI * 1.5]} />
               <meshPhysicalMaterial
                 color={layer.color}
                 transparent
@@ -60,13 +124,13 @@ function EarthLayers({ cutaway, selectedLayer, onSelectLayer, rotationSpeed }: {
       {/* Atmosphere glow */}
       {!cutaway && (
         <mesh>
-          <sphereGeometry args={[2.15, 64, 64]} />
-          <meshPhysicalMaterial color="#60a5fa" transparent opacity={0.12} side={THREE.BackSide} emissive="#60a5fa" emissiveIntensity={0.3} />
+          <sphereGeometry args={[2.2, 64, 64]} />
+          <meshPhysicalMaterial color="#60a5fa" transparent opacity={0.14} side={THREE.BackSide} emissive="#60a5fa" emissiveIntensity={0.4} />
         </mesh>
       )}
 
-      {/* Tectonic plates (markers) */}
-      {!cutaway && plateData.map((plate) => (
+      {/* Tectonic plate markers (cutaway only — they were misaligned on globe) */}
+      {cutaway && plateData.map((plate) => (
         <mesh key={plate.name} position={plate.position}>
           <sphereGeometry args={[0.1, 12, 12]} />
           <meshPhysicalMaterial color={plate.color} emissive={plate.color} emissiveIntensity={0.5} roughness={0.3} clearcoat={1} />

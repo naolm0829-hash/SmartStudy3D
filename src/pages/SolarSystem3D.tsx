@@ -1,6 +1,6 @@
 // @ts-nocheck
-import { useRef, useState, useMemo } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { useRef, useState, useMemo, useEffect } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Stars, Html, Sparkles, Environment } from "@react-three/drei";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Info, Pause, Play, FastForward, Rewind, Eye, EyeOff, Target } from "lucide-react";
@@ -89,9 +89,10 @@ function Sun() {
   );
 }
 
-function Planet({ data, speed, showOrbit, showMoons, showLabels, onSelect, focused }: {
+function Planet({ data, speed, showOrbit, showMoons, showLabels, onSelect, focused, registerPos }: {
   data: PlanetData; speed: number; showOrbit: boolean; showMoons: boolean; showLabels: boolean;
   onSelect: (p: PlanetData, pos: THREE.Vector3) => void; focused: string | null;
+  registerPos: (name: string, pos: THREE.Vector3, radius: number) => void;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const meshRef = useRef<THREE.Mesh>(null);
@@ -102,19 +103,20 @@ function Planet({ data, speed, showOrbit, showMoons, showLabels, onSelect, focus
     if (groupRef.current) {
       groupRef.current.position.x = Math.cos(angleRef.current) * data.distance;
       groupRef.current.position.z = Math.sin(angleRef.current) * data.distance;
+      const wp = new THREE.Vector3();
+      groupRef.current.getWorldPosition(wp);
+      registerPos(data.name, wp, data.radius);
     }
     if (meshRef.current) meshRef.current.rotation.y += dt * data.rotationSpeed * speed;
   });
 
-  // Orbit ring
   const orbitGeometry = useMemo(() => {
     const points: THREE.Vector3[] = [];
     for (let i = 0; i <= 96; i++) {
       const t = (i / 96) * Math.PI * 2;
       points.push(new THREE.Vector3(Math.cos(t) * data.distance, 0, Math.sin(t) * data.distance));
     }
-    const geo = new THREE.BufferGeometry().setFromPoints(points);
-    return geo;
+    return new THREE.BufferGeometry().setFromPoints(points);
   }, [data.distance]);
 
   return (
@@ -147,7 +149,6 @@ function Planet({ data, speed, showOrbit, showMoons, showLabels, onSelect, focus
           />
         </mesh>
 
-        {/* Atmosphere for Earth & Venus */}
         {(data.name === "Earth" || data.name === "Venus") && (
           <mesh scale={1.08}>
             <sphereGeometry args={[data.radius, 32, 32]} />
@@ -155,7 +156,6 @@ function Planet({ data, speed, showOrbit, showMoons, showLabels, onSelect, focus
           </mesh>
         )}
 
-        {/* Rings */}
         {data.ring && (
           <mesh rotation={[Math.PI / 2.3, 0, 0]}>
             <ringGeometry args={[data.radius * data.ring.inner, data.radius * data.ring.outer, 96]} />
@@ -163,12 +163,10 @@ function Planet({ data, speed, showOrbit, showMoons, showLabels, onSelect, focus
           </mesh>
         )}
 
-        {/* Moons */}
         {showMoons && data.moons?.map((moon) => (
           <Moon key={moon.name} moon={moon} parentRadius={data.radius} speed={speed} showLabels={showLabels} />
         ))}
 
-        {/* Label */}
         {showLabels && (
           <Html position={[0, data.radius + 0.3, 0]} center distanceFactor={focused === data.name ? 4 : 12}>
             <div className={`px-2 py-0.5 rounded-md text-[10px] font-semibold whitespace-nowrap pointer-events-none ${
@@ -208,7 +206,33 @@ function Moon({ moon, parentRadius, speed, showLabels }: any) {
   );
 }
 
-function CameraRig() { return null; }
+function CameraRig({ focused, positions, controlsRef }: {
+  focused: string | null;
+  positions: React.MutableRefObject<Record<string, { pos: THREE.Vector3; radius: number }>>;
+  controlsRef: React.MutableRefObject<any>;
+}) {
+  const { camera } = useThree();
+  const targetPos = useRef(new THREE.Vector3());
+  const desiredCam = useRef(new THREE.Vector3(0, 18, 35));
+
+  useFrame(() => {
+    if (focused && positions.current[focused]) {
+      const { pos, radius } = positions.current[focused];
+      targetPos.current.copy(pos);
+      const dist = Math.max(radius * 6, 1.8);
+      desiredCam.current.set(pos.x + dist, pos.y + dist * 0.5, pos.z + dist);
+    } else {
+      targetPos.current.set(0, 0, 0);
+      desiredCam.current.set(0, 18, 35);
+    }
+    camera.position.lerp(desiredCam.current, 0.06);
+    if (controlsRef.current) {
+      controlsRef.current.target.lerp(targetPos.current, 0.1);
+      controlsRef.current.update();
+    }
+  });
+  return null;
+}
 
 const SolarSystem3D = () => {
   const [speed, setSpeed] = useState(1);
@@ -218,8 +242,14 @@ const SolarSystem3D = () => {
   const [showLabels, setShowLabels] = useState(true);
   const [selected, setSelected] = useState<PlanetData | null>(null);
   const [focused, setFocused] = useState<string | null>(null);
+  const positionsRef = useRef<Record<string, { pos: THREE.Vector3; radius: number }>>({});
+  const controlsRef = useRef<any>(null);
 
   const effectiveSpeed = paused ? 0 : speed;
+
+  const registerPos = (name: string, pos: THREE.Vector3, radius: number) => {
+    positionsRef.current[name] = { pos: pos.clone(), radius };
+  };
 
   return (
     <div className="h-screen bg-black flex flex-col">
@@ -231,6 +261,11 @@ const SolarSystem3D = () => {
           <h1 className="text-sm font-semibold">Solar System Lab</h1>
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
+          {focused && (
+            <Button variant="outline" size="sm" className="rounded-[10px] h-8 text-[10px]" onClick={() => { setFocused(null); setSelected(null); }}>
+              Reset View
+            </Button>
+          )}
           <Button variant={paused ? "default" : "outline"} size="sm" className="rounded-[10px] h-8" onClick={() => setPaused(!paused)}>
             {paused ? <Play className="h-3 w-3" /> : <Pause className="h-3 w-3" />}
           </Button>
@@ -258,14 +293,17 @@ const SolarSystem3D = () => {
               showOrbit={showOrbits}
               showMoons={showMoons}
               showLabels={showLabels}
-              onSelect={(pl, pos) => { setSelected(pl); setFocused(pl.name); }}
+              onSelect={(pl) => { setSelected(pl); setFocused(pl.name); }}
               focused={focused}
+              registerPos={registerPos}
             />
           ))}
+          <CameraRig focused={focused} positions={positionsRef} controlsRef={controlsRef} />
           <OrbitControls
+            ref={controlsRef}
             enablePan
             enableZoom
-            minDistance={3}
+            minDistance={1}
             maxDistance={100}
             enableDamping
             dampingFactor={0.08}
