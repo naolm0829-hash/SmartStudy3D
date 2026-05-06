@@ -235,13 +235,6 @@ const Dashboard = () => {
             >
               {dark ? <Sun className="h-4 w-4 text-muted-foreground" /> : <Moon className="h-4 w-4 text-muted-foreground" />}
             </button>
-            <button className="relative p-2 rounded-[10px] hover:bg-secondary transition-colors">
-              <Bell className="h-4 w-4 text-muted-foreground" />
-              <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary" />
-            </button>
-            <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-semibold text-primary">
-              {initials}
-            </div>
           </div>
         </header>
 

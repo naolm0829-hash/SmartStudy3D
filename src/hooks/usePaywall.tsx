@@ -1,13 +1,13 @@
 import { useEffect, useState, useCallback } from "react";
 import { useAdminCheck } from "@/hooks/useAdminCheck";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 const LIMIT_3D = 3;
 const LIMIT_AI = 5;
 
 const KEY_3D = "paywall_3d_visited";
 const KEY_AI = "paywall_ai_count";
-const KEY_PRO = "paywall_pro";
 
 function readSet(key: string): Set<string> {
   try {
@@ -32,9 +32,24 @@ export function usePaywall() {
   const { isAdmin } = useAdminCheck();
   const [visited3D, setVisited3D] = useState<Set<string>>(new Set());
   const [aiCount, setAiCount] = useState(0);
+  const [hasPremium, setHasPremium] = useState(false);
 
-  // Pro flag (set manually via localStorage for now; admin can toggle)
-  const isPro = isAdmin || localStorage.getItem(KEY_PRO) === "1";
+  // Check premium status from DB (server-side, expires after 30 days)
+  useEffect(() => {
+    if (!user) {
+      setHasPremium(false);
+      return;
+    }
+    (async () => {
+      const { data } = await supabase.rpc("has_active_role" as any, {
+        _user_id: user.id,
+        _role: "premium" as any,
+      });
+      setHasPremium(!!data);
+    })();
+  }, [user?.id]);
+
+  const isPro = isAdmin || hasPremium;
 
   useEffect(() => {
     setVisited3D(readSet(KEY_3D));
@@ -77,6 +92,7 @@ export function usePaywall() {
   return {
     isPro,
     isAdmin,
+    isPremium: hasPremium,
     visited3D,
     aiCount,
     limit3D: LIMIT_3D,

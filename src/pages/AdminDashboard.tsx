@@ -15,9 +15,6 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -33,7 +30,8 @@ interface UserWithRole {
   bio: string | null;
   avatar_url: string | null;
   created_at: string;
-  role: AppRole;
+  role: AppRole; // primary role for legacy display
+  roles: AppRole[]; // all roles
 }
 
 interface QuizScore {
@@ -61,8 +59,8 @@ const AdminDashboard = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; type: string; id: string; name: string }>({ open: false, type: "", id: "", name: "" });
-  const [editRoleDialog, setEditRoleDialog] = useState<{ open: boolean; userId: string; currentRole: AppRole; name: string }>({ open: false, userId: "", currentRole: "student", name: "" });
-  const [newRole, setNewRole] = useState<AppRole>("student");
+  const [editRoleDialog, setEditRoleDialog] = useState<{ open: boolean; userId: string; name: string }>({ open: false, userId: "", name: "" });
+  const [selectedRoles, setSelectedRoles] = useState<Set<AppRole>>(new Set());
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -71,13 +69,20 @@ const AdminDashboard = () => {
     const { data: roles } = await supabase.from("user_roles").select("*");
 
     if (profiles) {
-      const roleMap = new Map<string, AppRole>();
-      roles?.forEach((r) => roleMap.set(r.user_id, r.role));
+      const roleMap = new Map<string, AppRole[]>();
+      roles?.forEach((r) => {
+        const arr = roleMap.get(r.user_id) || [];
+        arr.push(r.role);
+        roleMap.set(r.user_id, arr);
+      });
 
-      setUsers(profiles.map((p) => ({
-        ...p,
-        role: roleMap.get(p.user_id) || "student",
-      })));
+      setUsers(profiles.map((p) => {
+        const userRoles = roleMap.get(p.user_id) || ["student" as AppRole];
+        // primary role priority: admin > teacher > premium > student
+        const priority: AppRole[] = ["admin" as AppRole, "teacher" as AppRole, "premium" as AppRole, "student" as AppRole];
+        const primary = priority.find(r => userRoles.includes(r)) || userRoles[0];
+        return { ...p, role: primary, roles: userRoles };
+      }));
     }
   }, []);
 
@@ -140,37 +145,50 @@ const AdminDashboard = () => {
     setDeleteDialog({ open: false, type: "", id: "", name: "" });
   };
 
-  // Real role update handler
+  // Multi-role update: replace user's roles with the selected set
   const handleRoleUpdate = async () => {
     try {
-      // Check if role record exists
+      const userId = editRoleDialog.userId;
+      const desired = Array.from(selectedRoles);
+      if (desired.length === 0) {
+        toast({ title: "Pick at least one role", variant: "destructive" });
+        return;
+      }
+      // Get current roles
       const { data: existing } = await supabase
         .from("user_roles")
-        .select("id")
-        .eq("user_id", editRoleDialog.userId)
-        .maybeSingle();
+        .select("role")
+        .eq("user_id", userId);
+      const currentRoles = (existing || []).map((r) => r.role as AppRole);
 
-      if (existing) {
-        const { error } = await supabase
-          .from("user_roles")
-          .update({ role: newRole })
-          .eq("user_id", editRoleDialog.userId);
+      // Roles to add
+      const toAdd = desired.filter((r) => !currentRoles.includes(r));
+      // Roles to remove
+      const toRemove = currentRoles.filter((r) => !desired.includes(r));
+
+      if (toAdd.length > 0) {
+        const rows = toAdd.map((role) => ({ user_id: userId, role, granted_at: new Date().toISOString() }));
+        const { error } = await supabase.from("user_roles").insert(rows as any);
         if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from("user_roles")
-          .insert({ user_id: editRoleDialog.userId, role: newRole });
+      }
+      // Re-grant premium (refresh granted_at) if it was already there and is still selected
+      if (desired.includes("premium" as AppRole) && currentRoles.includes("premium" as AppRole)) {
+        await supabase.from("user_roles")
+          .update({ granted_at: new Date().toISOString() } as any)
+          .eq("user_id", userId)
+          .eq("role", "premium" as AppRole);
+      }
+      for (const r of toRemove) {
+        const { error } = await supabase.from("user_roles").delete().eq("user_id", userId).eq("role", r);
         if (error) throw error;
       }
 
-      setUsers((prev) => prev.map((u) =>
-        u.user_id === editRoleDialog.userId ? { ...u, role: newRole } : u
-      ));
-      toast({ title: "Role updated", description: `${editRoleDialog.name} is now ${newRole}.` });
+      await fetchUsers();
+      toast({ title: "Roles updated", description: `${editRoleDialog.name} now has: ${desired.join(", ")}` });
     } catch (err: any) {
-      toast({ title: "Error", description: err.message || "Failed to update role", variant: "destructive" });
+      toast({ title: "Error", description: err.message || "Failed to update roles", variant: "destructive" });
     }
-    setEditRoleDialog({ open: false, userId: "", currentRole: "student", name: "" });
+    setEditRoleDialog({ open: false, userId: "", name: "" });
   };
 
   // Enriched quiz scores with user names
@@ -193,6 +211,7 @@ const AdminDashboard = () => {
 
   const roleColor = (role: AppRole) => {
     if (role === "admin") return "destructive" as const;
+    if ((role as string) === "premium") return "default" as const;
     if (role === "teacher") return "default" as const;
     return "secondary" as const;
   };
@@ -340,7 +359,11 @@ const AdminDashboard = () => {
                         {new Date(u.created_at).toLocaleDateString()}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={roleColor(u.role)} className="text-[10px] capitalize">{u.role}</Badge>
+                        <div className="flex flex-wrap gap-1">
+                          {u.roles.map((r) => (
+                            <Badge key={r} variant={roleColor(r)} className="text-[10px] capitalize">{r}</Badge>
+                          ))}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
@@ -349,8 +372,8 @@ const AdminDashboard = () => {
                             size="icon"
                             className="h-8 w-8"
                             onClick={() => {
-                              setNewRole(u.role);
-                              setEditRoleDialog({ open: true, userId: u.user_id, currentRole: u.role, name: u.display_name || "Unknown" });
+                              setSelectedRoles(new Set(u.roles));
+                              setEditRoleDialog({ open: true, userId: u.user_id, name: u.display_name || "Unknown" });
                             }}
                           >
                             <Edit className="h-3 w-3" />
@@ -498,26 +521,42 @@ const AdminDashboard = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Role Dialog */}
+      {/* Edit Roles Dialog (multi-select) */}
       <Dialog open={editRoleDialog.open} onOpenChange={(open) => setEditRoleDialog({ ...editRoleDialog, open })}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Edit Role</DialogTitle>
+            <DialogTitle>Edit Roles</DialogTitle>
             <DialogDescription>
-              Change the role for "{editRoleDialog.name}".
+              Assign one or more roles to "{editRoleDialog.name}". A user can be both Admin and Premium. Premium grants full access for 30 days.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <Select value={newRole} onValueChange={(v) => setNewRole(v as AppRole)}>
-              <SelectTrigger className="rounded-[10px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="student">Student</SelectItem>
-                <SelectItem value="teacher">Teacher</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="py-4 space-y-2">
+            {(["student", "premium", "teacher", "admin"] as AppRole[]).map((r) => {
+              const checked = selectedRoles.has(r);
+              return (
+                <label key={r} className="flex items-center gap-3 p-3 rounded-[10px] border border-border/50 hover:bg-secondary/40 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-primary"
+                    checked={checked}
+                    onChange={(e) => {
+                      const next = new Set(selectedRoles);
+                      if (e.target.checked) next.add(r); else next.delete(r);
+                      setSelectedRoles(next);
+                    }}
+                  />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium capitalize">{r}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {r === "admin" && "Full admin panel access"}
+                      {r === "premium" && "Unlimited 3D & AI Tutor for 30 days"}
+                      {r === "teacher" && "Can create content"}
+                      {r === "student" && "Default learner access"}
+                    </p>
+                  </div>
+                </label>
+              );
+            })}
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setEditRoleDialog({ ...editRoleDialog, open: false })}>

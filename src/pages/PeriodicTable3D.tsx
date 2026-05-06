@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { useState, useRef, useMemo } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, Environment, Float, Html } from "@react-three/drei";
+import { OrbitControls, Environment, Float, Html, Text } from "@react-three/drei";
 import { ArrowLeft, Atom, Search } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -42,13 +42,22 @@ function ElementCard3D({ element, selected, hovered, onClick, dim }: { element: 
         emissive={selected ? element.color : "#000"}
         emissiveIntensity={selected ? 0.6 : hovered ? 0.25 : 0}
       />
-      <Html position={[0, 0, 0.04]} center transform scale={0.12} distanceFactor={5}>
-        <div className="text-center select-none pointer-events-none" style={{ color: "#fff", width: "60px", opacity: dim ? 0.3 : 1 }}>
-          <div style={{ fontSize: "8px", opacity: 0.85 }}>{element.number}</div>
-          <div style={{ fontSize: "22px", fontWeight: 800, lineHeight: 1 }}>{element.symbol}</div>
-          <div style={{ fontSize: "6px", opacity: 0.7, marginTop: 2 }}>{element.mass}</div>
-        </div>
-      </Html>
+      {/* Atomic number */}
+      <Text position={[-0.18, 0.22, 0.04]} fontSize={0.05} color="#ffffff" anchorX="left" anchorY="middle" fillOpacity={dim ? 0.3 : 0.9}>
+        {String(element.number)}
+      </Text>
+      {/* Symbol */}
+      <Text position={[0, 0.05, 0.04]} fontSize={0.18} color="#ffffff" anchorX="center" anchorY="middle" fontWeight={800} fillOpacity={dim ? 0.35 : 1} outlineWidth={0.004} outlineColor="#000000">
+        {element.symbol}
+      </Text>
+      {/* Name */}
+      <Text position={[0, -0.13, 0.04]} fontSize={0.045} color="#ffffff" anchorX="center" anchorY="middle" maxWidth={0.45} fillOpacity={dim ? 0.3 : 0.95} outlineWidth={0.002} outlineColor="#000000">
+        {element.name}
+      </Text>
+      {/* Mass */}
+      <Text position={[0, -0.22, 0.04]} fontSize={0.035} color="#ffffff" anchorX="center" anchorY="middle" fillOpacity={dim ? 0.25 : 0.7}>
+        {element.mass}
+      </Text>
     </mesh>
   );
 }
@@ -106,7 +115,7 @@ const PeriodicTable3D = () => {
   ), [search, filterCategory]);
 
   return (
-    <div className="h-screen flex flex-col bg-background">
+    <div className="h-[100dvh] flex flex-col bg-background">
       <header className="h-12 sm:h-14 border-b border-border/50 flex items-center px-3 sm:px-4 bg-card/80 backdrop-blur-xl z-10 gap-2">
         <Link to="/3d"><Button variant="ghost" size="icon" className="rounded-lg h-8 w-8"><ArrowLeft className="h-4 w-4" /></Button></Link>
         <Atom className="h-4 w-4 text-cyan-500 shrink-0" />

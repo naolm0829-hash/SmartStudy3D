@@ -252,7 +252,7 @@ const SolarSystem3D = () => {
   };
 
   return (
-    <div className="h-screen bg-black flex flex-col">
+    <div className="h-[100dvh] bg-black flex flex-col">
       <header className="h-14 border-b border-border/30 flex items-center justify-between px-4 sm:px-6 shrink-0 bg-card/30 backdrop-blur-xl z-10">
         <div className="flex items-center gap-3">
           <Link to="/3d">

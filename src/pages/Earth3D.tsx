@@ -170,7 +170,7 @@ const Earth3D = () => {
   const selected = layerData.find(l => l.name === selectedLayer);
 
   return (
-    <div className="h-screen bg-background flex flex-col">
+    <div className="h-[100dvh] bg-background flex flex-col">
       <header className="h-12 sm:h-14 border-b border-border/50 flex items-center px-3 sm:px-4 bg-card/80 backdrop-blur-xl z-10 gap-2">
         <Link to="/3d"><Button variant="ghost" size="icon" className="rounded-lg h-8 w-8"><ArrowLeft className="h-4 w-4" /></Button></Link>
         <Compass className="h-4 w-4 text-green-500 shrink-0" />

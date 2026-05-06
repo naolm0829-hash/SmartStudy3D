@@ -169,7 +169,7 @@ const Volcano3D = () => {
   const layers: Layer[] = ["exterior", "magma-chamber", "conduit", "crater", "lava-flow"];
 
   return (
-    <div className="h-screen flex flex-col bg-background">
+    <div className="h-[100dvh] flex flex-col bg-background">
       <header className="h-12 sm:h-14 border-b border-border/50 flex items-center px-3 sm:px-4 bg-card/80 backdrop-blur-xl z-10 gap-2">
         <Link to="/3d"><Button variant="ghost" size="icon" className="rounded-lg h-8 w-8"><ArrowLeft className="h-4 w-4" /></Button></Link>
         <Mountain className="h-4 w-4 text-orange-500 shrink-0" />

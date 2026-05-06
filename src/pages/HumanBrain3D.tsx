@@ -113,7 +113,7 @@ const HumanBrain3D = () => {
   const [neurons, setNeurons] = useState(true);
 
   return (
-    <div className="h-screen bg-background flex flex-col">
+    <div className="h-[100dvh] bg-background flex flex-col">
       <header className="h-14 border-b border-border/50 flex items-center justify-between px-4 sm:px-6 shrink-0 bg-card/50 backdrop-blur-xl z-10">
         <div className="flex items-center gap-3">
           <Link to="/3d"><Button variant="ghost" size="icon" className="rounded-[10px]"><ArrowLeft className="h-4 w-4" /></Button></Link>
