@@ -32,6 +32,8 @@ interface UserWithRole {
   created_at: string;
   role: AppRole; // primary role for legacy display
   roles: AppRole[]; // all roles
+  premiumGrantedAt?: string | null;
+  premiumExpiresAt?: string | null;
 }
 
 interface QuizScore {
@@ -70,18 +72,23 @@ const AdminDashboard = () => {
 
     if (profiles) {
       const roleMap = new Map<string, AppRole[]>();
-      roles?.forEach((r) => {
+      const premiumGrantMap = new Map<string, string>();
+      roles?.forEach((r: any) => {
         const arr = roleMap.get(r.user_id) || [];
         arr.push(r.role);
         roleMap.set(r.user_id, arr);
+        if (r.role === "premium" && r.granted_at) {
+          premiumGrantMap.set(r.user_id, r.granted_at);
+        }
       });
 
       setUsers(profiles.map((p) => {
         const userRoles = roleMap.get(p.user_id) || ["student" as AppRole];
-        // primary role priority: admin > teacher > premium > student
         const priority: AppRole[] = ["admin" as AppRole, "teacher" as AppRole, "premium" as AppRole, "student" as AppRole];
         const primary = priority.find(r => userRoles.includes(r)) || userRoles[0];
-        return { ...p, role: primary, roles: userRoles };
+        const grantedAt = premiumGrantMap.get(p.user_id) || null;
+        const expiresAt = grantedAt ? new Date(new Date(grantedAt).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString() : null;
+        return { ...p, role: primary, roles: userRoles, premiumGrantedAt: grantedAt, premiumExpiresAt: expiresAt };
       }));
     }
   }, []);
@@ -184,7 +191,13 @@ const AdminDashboard = () => {
       }
 
       await fetchUsers();
-      toast({ title: "Roles updated", description: `${editRoleDialog.name} now has: ${desired.join(", ")}` });
+      const premiumNote = desired.includes("premium" as AppRole)
+        ? ` Premium active until ${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}.`
+        : "";
+      toast({
+        title: "✓ Roles saved",
+        description: `${editRoleDialog.name} now has: ${desired.map((r) => r.charAt(0).toUpperCase() + r.slice(1)).join(", ")}.${premiumNote}`,
+      });
     } catch (err: any) {
       toast({ title: "Error", description: err.message || "Failed to update roles", variant: "destructive" });
     }
@@ -364,6 +377,12 @@ const AdminDashboard = () => {
                             <Badge key={r} variant={roleColor(r)} className="text-[10px] capitalize">{r}</Badge>
                           ))}
                         </div>
+                        {u.premiumGrantedAt && (
+                          <div className="mt-1 text-[9px] text-muted-foreground leading-tight">
+                            <div>Premium since: <span className="font-mono-data">{new Date(u.premiumGrantedAt).toLocaleDateString()}</span></div>
+                            <div>Expires: <span className={`font-mono-data ${new Date(u.premiumExpiresAt!) < new Date() ? "text-destructive" : "text-green-500"}`}>{new Date(u.premiumExpiresAt!).toLocaleDateString()}</span></div>
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">

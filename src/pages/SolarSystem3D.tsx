@@ -211,19 +211,34 @@ function CameraRig({ focused, positions, controlsRef }: {
   positions: React.MutableRefObject<Record<string, { pos: THREE.Vector3; radius: number }>>;
   controlsRef: React.MutableRefObject<any>;
 }) {
-  const { camera } = useThree();
+  const { camera, size } = useThree();
   const targetPos = useRef(new THREE.Vector3());
   const desiredCam = useRef(new THREE.Vector3(0, 18, 35));
 
+  // Responsive: pull camera back & widen FOV on narrow / portrait viewports so all 8 planets fit.
   useFrame(() => {
+    const aspect = size.width / Math.max(1, size.height);
+    const isPortrait = aspect < 1;
+    const overviewDist = isPortrait ? 70 : 38;
+    const overviewY = isPortrait ? 38 : 18;
+    const targetFov = isPortrait ? 70 : 55;
+
+    if ((camera as THREE.PerspectiveCamera).fov !== undefined) {
+      const persp = camera as THREE.PerspectiveCamera;
+      if (Math.abs(persp.fov - targetFov) > 0.5) {
+        persp.fov += (targetFov - persp.fov) * 0.1;
+        persp.updateProjectionMatrix();
+      }
+    }
+
     if (focused && positions.current[focused]) {
       const { pos, radius } = positions.current[focused];
       targetPos.current.copy(pos);
-      const dist = Math.max(radius * 6, 1.8);
+      const dist = Math.max(radius * (isPortrait ? 9 : 6), 2.2);
       desiredCam.current.set(pos.x + dist, pos.y + dist * 0.5, pos.z + dist);
     } else {
       targetPos.current.set(0, 0, 0);
-      desiredCam.current.set(0, 18, 35);
+      desiredCam.current.set(0, overviewY, overviewDist);
     }
     camera.position.lerp(desiredCam.current, 0.06);
     if (controlsRef.current) {
@@ -253,26 +268,26 @@ const SolarSystem3D = () => {
 
   return (
     <div className="h-[100dvh] bg-black flex flex-col">
-      <header className="h-14 border-b border-border/30 flex items-center justify-between px-4 sm:px-6 shrink-0 bg-card/30 backdrop-blur-xl z-10">
-        <div className="flex items-center gap-3">
+      <header className="border-b border-border/30 flex items-center justify-between gap-2 px-3 sm:px-6 py-2 shrink-0 bg-card/30 backdrop-blur-xl z-10 flex-wrap">
+        <div className="flex items-center gap-2 min-w-0">
           <Link to="/3d">
-            <Button variant="ghost" size="icon" className="rounded-[10px]"><ArrowLeft className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="icon" className="rounded-[10px] h-8 w-8"><ArrowLeft className="h-4 w-4" /></Button>
           </Link>
-          <h1 className="text-sm font-semibold">Solar System Lab</h1>
+          <h1 className="text-xs sm:text-sm font-semibold truncate">Solar System</h1>
         </div>
-        <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap justify-end">
           {focused && (
-            <Button variant="outline" size="sm" className="rounded-[10px] h-8 text-[10px]" onClick={() => { setFocused(null); setSelected(null); }}>
-              Reset View
+            <Button variant="outline" size="sm" className="rounded-[10px] h-7 text-[10px] px-2" onClick={() => { setFocused(null); setSelected(null); }}>
+              Reset
             </Button>
           )}
-          <Button variant={paused ? "default" : "outline"} size="sm" className="rounded-[10px] h-8" onClick={() => setPaused(!paused)}>
+          <Button variant={paused ? "default" : "outline"} size="sm" className="rounded-[10px] h-7 w-7 p-0" onClick={() => setPaused(!paused)}>
             {paused ? <Play className="h-3 w-3" /> : <Pause className="h-3 w-3" />}
           </Button>
-          <div className="flex items-center gap-1.5 px-2">
-            <Rewind className="h-3 w-3 text-muted-foreground" />
-            <Slider value={[speed]} onValueChange={(v) => setSpeed(v[0])} min={0.1} max={5} step={0.1} className="w-20" />
-            <FastForward className="h-3 w-3 text-muted-foreground" />
+          <div className="flex items-center gap-1 px-1">
+            <Rewind className="h-3 w-3 text-muted-foreground hidden sm:block" />
+            <Slider value={[speed]} onValueChange={(v) => setSpeed(v[0])} min={0.1} max={5} step={0.1} className="w-16 sm:w-20" />
+            <FastForward className="h-3 w-3 text-muted-foreground hidden sm:block" />
             <span className="text-[10px] text-muted-foreground font-mono w-8">{speed.toFixed(1)}×</span>
           </div>
         </div>
@@ -312,7 +327,7 @@ const SolarSystem3D = () => {
         </Canvas>
 
         {/* Layer toggles */}
-        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="absolute top-4 left-4 glass-card p-3 space-y-2 w-44">
+        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="absolute top-2 left-2 glass-card p-2 sm:p-3 space-y-1.5 sm:space-y-2 w-32 sm:w-44">
           <div className="flex items-center gap-2 pb-1.5 border-b border-border/40">
             <Eye className="h-3.5 w-3.5 text-primary" />
             <span className="text-[11px] font-bold">View</span>
@@ -353,7 +368,7 @@ const SolarSystem3D = () => {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
-              className="absolute top-4 right-4 w-72 glass-card p-4 space-y-3"
+              className="absolute top-2 right-2 w-[calc(100vw-1rem)] sm:w-72 max-w-xs glass-card p-3 sm:p-4 space-y-2 sm:space-y-3"
             >
               <div className="flex items-start justify-between">
                 <div>
@@ -394,7 +409,7 @@ const SolarSystem3D = () => {
         </AnimatePresence>
 
         {!selected && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute top-4 right-4 glass-card p-3 max-w-xs">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute top-2 right-2 glass-card p-2 sm:p-3 max-w-[180px] sm:max-w-xs">
             <div className="flex items-center gap-2">
               <Info className="h-3.5 w-3.5 text-primary" />
               <span className="text-[11px] font-semibold">Click a planet</span>
